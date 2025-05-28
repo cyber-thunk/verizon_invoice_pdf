@@ -118,3 +118,4 @@ output_csvs/
 # this pattern works if the .gitignore is in the root.
 # If you only want to ignore PDFs in the *root* directory, use / J.pdf
 *.pdf
+*.csv
