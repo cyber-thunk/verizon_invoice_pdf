@@ -1,8 +1,10 @@
+import argparse
 import camelot
 from PyPDF2 import PdfReader, PdfWriter
 import warnings
 import os
 import pandas as pd  # Explicitly import pandas for clarity
+import atexit
 
 # Suppress the CryptographyDeprecationWarning
 warnings.filterwarnings("ignore", category=DeprecationWarning)
@@ -11,24 +13,58 @@ warnings.filterwarnings("ignore", category=DeprecationWarning)
 # DEFINING VARIABLES
 ###############################################
 # Define file paths
-pdf_path = "verizon_invoice.pdf"
-rotated_pdf_path = "rotated_verizon_invoice.pdf"
-output_dir = "output_csvs"
+parser = argparse.ArgumentParser(description="Parse Verizon invoice PDF")
+parser.add_argument("--pdf", default="verizon_invoice.pdf", help="Path to input PDF")
+parser.add_argument("--output-dir", default="output_csvs", help="Output directory for CSV files")
+args = parser.parse_args()
+
+pdf_path = args.pdf
+output_dir = args.output_dir
+rotated_pdf_path = os.path.join(os.path.dirname(pdf_path), "rotated_verizon_invoice.pdf")
+
+###############################################
+# CLEANING UP TEMP FILES
+###############################################
+# Check if input PDF exists
+if not os.path.exists(pdf_path):
+    print(f"Error: Input PDF '{pdf_path}' not found.")
+    exit(1)
+
+# Clean up temporary files on exit
+def cleanup():
+    if os.path.exists(rotated_pdf_path):
+        os.remove(rotated_pdf_path)
+        print(f"Cleaned up temporary file: {rotated_pdf_path}")
+
+atexit.register(cleanup)
+
+# Check if input PDF exists
+if not os.path.exists(pdf_path):
+    print(f"Error: Input PDF '{pdf_path}' not found.")
+    exit(1)
 
 ###############################################
 # ROTATING PDF PAGES
 ###############################################
 # Function to rotate PDF pages
-def rotate_pdf(input_path, output_path, rotation=90):
-    reader = PdfReader(input_path)
-    writer = PdfWriter()
-    
-    for page in reader.pages:
-        page.rotate(rotation)
-        writer.add_page(page)
-    
-    with open(output_path, 'wb') as output_file:
-        writer.write(output_file)
+def rotate_pdf(input_path, output_path, rotation):
+    try:
+        reader = PdfReader(input_path)
+        writer = PdfWriter()
+        for page in reader.pages:
+            page.rotate(rotation)
+            writer.add_page(page)
+        with open(output_path, 'wb') as output_file:
+            writer.write(output_file)
+    except FileNotFoundError as e:
+            print(f"Error: Input PDF '{input_path}' not found: {e}")
+            exit(1)
+    except PermissionError as e:
+        print(f"Error: Cannot write to output path '{output_path}': {e}")
+        exit(1)
+    except Exception as e:
+        print(f"Error rotating PDF: {e}")
+        exit(1)
 
 ###############################################
 # STACKING/APPENDING TABLES
@@ -78,12 +114,11 @@ os.makedirs(output_dir, exist_ok=True)
 # Rotate the PDF by 90 degrees
 rotate_pdf(pdf_path, rotated_pdf_path, rotation=90)
 
-# Extract tables from the rotated PDF using flavor='stream'
-tables = camelot.read_pdf(
-    rotated_pdf_path,
-    flavor='stream',
-    pages='all'
-)
+try:
+    tables = camelot.read_pdf(rotated_pdf_path, flavor='stream', pages='all')
+except Exception as e:
+    print(f"Error reading PDF with Camelot: {e}")
+    exit(1)
 
 ###############################################
 # REFORMATTING MONETARY VALUES FOR SUMMATION
@@ -252,19 +287,14 @@ if stacked_table is not None:
     # Print and save the resulting table
     print("Stacked Table Contents:")
     print(stacked_table)
-    output_csv_path = os.path.join(output_dir, "stacked_table.csv")
-    stacked_table.to_csv(output_csv_path, index=False)
-    print(f"Stacked table saved to {output_csv_path}")
-
-    ###############################################
-    # PRINTING UNIQUE VALUE FOR SPECIFIED COLUMNS
-    # HELPS WITH TROUBLESHOOTING
-    ###############################################
-    # # Print unique values in column 12 of stacked_table
-    # if stacked_table is not None and stacked_table.shape[1] > 12:
-    #     unique_values = stacked_table.iloc[:, 12].unique()
-    #     print(f"Unique values in column 12: {unique_values}")
-    # else:
-    #     print(f"Cannot print unique values: stacked_table is {stacked_table} or has only {stacked_table.shape[1] if stacked_table is not None else 0} columns.")    
+    try:
+        if not os.access(output_dir, os.W_OK):
+            raise PermissionError(f"Cannot write to output directory: {output_dir}")
+        output_csv_path = os.path.join(output_dir, "stacked_table.csv")
+        stacked_table.to_csv(output_csv_path, index=False)
+        print(f"Stacked table saved to {output_csv_path}")
+    except PermissionError as e:
+        print(f"Error: {e}. Please check directory permissions or specify a different output directory.")
+        exit(1)
 else:
     print("No stacked table was created, so no filtering applied.")
