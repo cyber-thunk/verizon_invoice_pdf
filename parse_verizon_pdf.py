@@ -194,6 +194,8 @@ stacked_table = stack_tables(
     table_indices=list(range(5, len(tables))),  # Specify the table indices to stack
 )
 
+print(stacked_table)
+
 ###############################################
 # CLEANING UP STACKED TABLE
 ###############################################
@@ -210,6 +212,7 @@ if stacked_table is not None:
     print(f"Removed {original_rows - deduplicated_rows} duplicate rows.")
     
     # Remove rows where the first column contains 'Roaming' or 'Data'
+    # This gets rid of what were the header columns in the PDF
     pre_filter_rows = stacked_table.shape[0]
     if stacked_table.shape[1] > 0:  # Ensure there is at least one column
         stacked_table = stacked_table[~stacked_table.iloc[:, 0].isin(['Roaming', 'Data'])]
@@ -217,20 +220,21 @@ if stacked_table is not None:
         print(f"Removed {pre_filter_rows - post_filter_rows} rows where first column is 'Roaming' or 'Data'.")
     else:
         print("No columns in stacked table, cannot filter by first column.")
-    
-    # Remove rows where column 12 has values '', '--', NaN, or None
-    pre_col12_filter_rows = stacked_table.shape[0]
-    if stacked_table.shape[1] > 12:  # Ensure column 12 exists
-        stacked_table = stacked_table[~stacked_table.iloc[:, 12].isin(['', '--']) & stacked_table.iloc[:, 12].notna()]
-        post_col12_filter_rows = stacked_table.shape[0]
-        print(f"Removed {pre_col12_filter_rows - post_col12_filter_rows} rows where column 12 is '', '--', NaN, or None.")
-    else:
-        print(f"Stacked table has only {stacked_table.shape[1]} columns, cannot filter by column 12.")
 
-    # Remove rows where column 14 has values Nan
+    # Remove rows where column 6 (total_charges) has values '', '--', NaN, or None
+    pre_col6_filter_rows = stacked_table.shape[0]
+    if stacked_table.shape[1] > 6:  # Ensure column 6 exists
+        stacked_table = stacked_table[~stacked_table.iloc[:, 6].isin(['', '--']) & stacked_table.iloc[:, 6].notna()]
+        post_col6_filter_rows = stacked_table.shape[0]
+        print(f"Removed {pre_col6_filter_rows - post_col6_filter_rows} rows where column 6 is '', '--', NaN, or None.")
+    else:
+        print(f"Stacked table has only {stacked_table.shape[1]} columns, cannot filter by column 6.")    
+
+    # Remove rows where column 14 (contains phone number and user name) has values Nan
     pre_col14_filter_rows = stacked_table.shape[0]
     if stacked_table.shape[1] > 14:  # Ensure there is at least one column
         stacked_table = stacked_table[~stacked_table.iloc[:, 14].isin(['', '--'])]
+        # Total current charges appears in this column and is not a row I want in the CSV
         stacked_table = stacked_table[~stacked_table.iloc[:, 14].isin(['Total Current Charges'])]
         post_col14_filter_rows = stacked_table.shape[0]
         print(f"Removed {pre_col14_filter_rows - post_col14_filter_rows} rows where column 14 is NaN.")
